@@ -15,7 +15,9 @@ from dataclasses import dataclass, field
 from functools import wraps
 from pathlib import Path
 from typing import Dict, List, Literal, Optional, Type, Union
+import logging
 
+from axolotl.utils.send import send_payload
 import torch
 import transformers
 from datasets import Dataset
@@ -730,6 +732,10 @@ class AxolotlTrainer(Trainer):
         for key, metrics in self._stored_metrics[train_eval].items():
             logs[key] = torch.tensor(metrics).mean().item()
         del self._stored_metrics[train_eval]
+
+        logs["global_step"] = self.state.global_step
+        logs["max_steps"] = self.state.max_steps
+        send_payload(logs)
         return super().log(logs)
 
     def store_metrics(
@@ -1031,7 +1037,10 @@ class HFCausalTrainerBuilder(TrainerBuilderBase):
             callbacks.append(SaveBetterTransformerModelCallback())
 
         if self.cfg.loss_watchdog_threshold is not None:
+            LOG.info("Adding LossWatchDogCallback")
             callbacks.append(LossWatchDogCallback(self.cfg))
+        else:
+            LOG.info("self.cfg.loss_watchdog_threshold is None")
 
         callbacks.append(SaveModelCallback())
 
